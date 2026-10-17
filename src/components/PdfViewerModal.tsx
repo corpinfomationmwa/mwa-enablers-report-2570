@@ -31,16 +31,6 @@ function formatFileSize(bytes?: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-function base64ToBlob(base64: string, mimeType = 'application/pdf'): Blob {
-  const clean = base64.replace(/^data:[^;]+;base64,/, '');
-  const binary = atob(clean);
-  const len = binary.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return new Blob([bytes], { type: mimeType });
-}
 
 function evidenceSource(file: AttachedEvidenceFile): string {
   if (file.dataUrl) return file.dataUrl;
@@ -230,7 +220,7 @@ function wrapTextLines(
 }
 
 /**
- * วาดและแปลงเป็น PDF ภาษาไทยความคมชัดสูง (A4 Landscape 300 DPI)
+ * วาดและแปลงเป็น PDF ภาษาไทยสำหรับเอกสารราชการ A4 Landscape โดยปรับขนาดตัวอักษรให้อ่านง่ายขึ้น
  * อิงโครงสร้างตามเอกสารราชการแบบ Reference:
  * - หัวกลางหน้า
  * - ข้อมูลผู้จัดทำเอกสาร
@@ -250,7 +240,7 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
   }
 
   const canvas = document.createElement('canvas');
-  // 1754 x 1240 px (A4 Landscape at ~150 DPI)
+  // 1754 x 1240 px; ใช้ตัวอักษรใหญ่ขึ้นเพื่อให้ PDF ที่พิมพ์ออกมาอ่านง่าย
   const width = 1754;
   const height = 1240;
   canvas.width = width;
@@ -266,7 +256,7 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
 
   // 1. หัวกลางหน้า (Official Title)
   ctx.fillStyle = '#000000';
-  ctx.font = `bold 22px ${FONT_OFFICIAL}`;
+  ctx.font = `bold 30px ${FONT_OFFICIAL}`;
   ctx.textAlign = 'center';
   ctx.fillText(
     `รายงานการสื่อสารตามแผนการสื่อสารภายในและภายนอกองค์กรของผู้บริหาร ประจำปีงบประมาณ ${printPayload.fiscalYear}`,
@@ -274,16 +264,16 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
     75
   );
 
-  ctx.font = `bold 18px ${FONT_OFFICIAL}`;
-  ctx.fillText(`ประจำเดือน ${printPayload.month}`, width / 2, 105);
+  ctx.font = `bold 24px ${FONT_OFFICIAL}`;
+  ctx.fillText(`ประจำเดือน ${printPayload.month}`, width / 2, 112);
 
   // 2. ข้อมูลผู้จัดทำเอกสาร (Official Author Metadata)
   ctx.textAlign = 'left';
-  const metaY = 145;
+  const metaY = 158;
   const leftX = 55;
   const rightX = 960;
 
-  ctx.font = `15px ${FONT_OFFICIAL}`;
+  ctx.font = `18px ${FONT_OFFICIAL}`;
   ctx.fillStyle = '#000000';
   ctx.fillText(`ผู้จัดทำเอกสาร: ${printPayload.author.name}`, leftX, metaY);
   ctx.fillText(`ตำแหน่ง: ${printPayload.author.position}`, rightX, metaY);
@@ -301,7 +291,7 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
 
   let currentY = metaY + 28;
   if (printPayload.enablersTopics && printPayload.enablersTopics.length > 0) {
-    currentY += 26;
+    currentY += 32;
     ctx.fillText(
       `ประเด็น Enablers ที่เกี่ยวข้อง: ${printPayload.enablersTopics.join(', ')}`,
       leftX,
@@ -317,7 +307,7 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
   const colW = [230, 684, 210, 240, 280]; // Total = 1644 px
 
   // Table Header
-  const thHeight = 40;
+  const thHeight = 48;
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(tableX, tableY, tableW, thHeight);
   ctx.strokeStyle = '#000000';
@@ -325,7 +315,7 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
   ctx.strokeRect(tableX, tableY, tableW, thHeight);
 
   ctx.fillStyle = '#000000';
-  ctx.font = `bold 15px ${FONT_OFFICIAL}`;
+  ctx.font = `bold 19px ${FONT_OFFICIAL}`;
   ctx.textAlign = 'center';
 
   const headers = [
@@ -351,13 +341,13 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
   // Table Body Rows
   ctx.textAlign = 'left';
   let rowY = tableY + thHeight;
-  const lineHeight = 20;
+  const lineHeight = 26;
 
   for (let rIdx = 0; rIdx < printPayload.tableRows.length; rIdx++) {
     const item = printPayload.tableRows[rIdx];
 
     // คำนวณความสูงของแถวตามเนื้อหา
-    ctx.font = `14px ${FONT_OFFICIAL}`;
+    ctx.font = `18px ${FONT_OFFICIAL}`;
     const c1Lines = wrapTextLines(ctx, item.communicator, colW[0] - 16);
     const c2Lines = wrapTextLines(ctx, item.topicOrDetails, colW[1] - 16);
     const c3Lines = wrapTextLines(ctx, item.channel, colW[2] - 16);
@@ -370,8 +360,8 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
     }));
     const filesCount = files.length > 0 ? files.length : 1;
     const maxTextLines = Math.max(c1Lines.length, c2Lines.length, c3Lines.length, c4Lines.length);
-    const evidenceBlockHeight = files.length ? files.length * 126 + 18 : 0;
-    const dynamicHeight = Math.max(75, maxTextLines * lineHeight + 20, evidenceBlockHeight);
+    const evidenceBlockHeight = files.length ? files.length * 174 + 18 : 0;
+    const dynamicHeight = Math.max(90, maxTextLines * lineHeight + 24, evidenceBlockHeight);
 
     // Draw row cell background and outline
     ctx.fillStyle = '#ffffff';
@@ -422,10 +412,10 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
       ctx.fillText('-', cx + 8, rowY + 22);
     } else {
       previews.forEach((preview, fIdx) => {
-        const blockY = rowY + 8 + fIdx * 126;
+        const blockY = rowY + 8 + fIdx * 174;
         if (preview.canvas) {
           const thumbW = 244;
-          const thumbH = 88;
+          const thumbH = 130;
           const scale = Math.min(thumbW / preview.canvas.width, thumbH / preview.canvas.height);
           const drawW = preview.canvas.width * scale;
           const drawH = preview.canvas.height * scale;
@@ -436,21 +426,21 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
           ctx.drawImage(preview.canvas, cx + 8 + (thumbW - drawW) / 2, blockY + (thumbH - drawH) / 2, drawW, drawH);
         } else {
           ctx.fillStyle = '#fff7ed';
-          ctx.fillRect(cx + 8, blockY, 244, 88);
+          ctx.fillRect(cx + 8, blockY, 244, 130);
           ctx.strokeStyle = '#fdba74';
-          ctx.strokeRect(cx + 8, blockY, 244, 88);
+          ctx.strokeRect(cx + 8, blockY, 244, 130);
           ctx.fillStyle = '#9a3412';
-          ctx.font = `12px ${FONT_OFFICIAL}`;
+          ctx.font = `16px ${FONT_OFFICIAL}`;
           const errorText = preview.error || 'ไม่สามารถสร้างตัวอย่างได้';
-          ctx.fillText(errorText.slice(0, 38), cx + 14, blockY + 30);
-          ctx.fillText(errorText.slice(38, 76), cx + 14, blockY + 50);
+          ctx.fillText(errorText.slice(0, 32), cx + 14, blockY + 34);
+          ctx.fillText(errorText.slice(32, 64), cx + 14, blockY + 58);
         }
         ctx.fillStyle = '#000000';
-        ctx.font = `12px ${FONT_OFFICIAL}`;
+        ctx.font = `15px ${FONT_OFFICIAL}`;
         const filename = preview.file.name || `ไฟล์แนบ ${fIdx + 1}`;
-        const maxChars = 36;
+        const maxChars = 30;
         const nameLines = filename.match(new RegExp(`.{1,${maxChars}}`, 'g')) || [filename];
-        nameLines.slice(0, 2).forEach((line, index) => ctx.fillText(line, cx + 8, blockY + 104 + index * 14));
+        nameLines.slice(0, 2).forEach((line, index) => ctx.fillText(line, cx + 8, blockY + 148 + index * 18));
       });
     }
 
@@ -461,14 +451,14 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
   // 4. ปัญหาและอุปสรรค & ข้อเสนอแนะ (ข้อความเรียบใต้ตาราง)
   const notesY = rowY + 25;
   ctx.fillStyle = '#000000';
-  ctx.font = `bold 15px ${FONT_OFFICIAL}`;
+  ctx.font = `bold 19px ${FONT_OFFICIAL}`;
   ctx.fillText('ปัญหาและอุปสรรคในการสื่อสาร/ขับเคลื่อน:', 55, notesY);
-  ctx.font = `14px ${FONT_OFFICIAL}`;
+  ctx.font = `18px ${FONT_OFFICIAL}`;
   ctx.fillText(printPayload.problems || '-', 365, notesY);
 
-  ctx.font = `bold 15px ${FONT_OFFICIAL}`;
+  ctx.font = `bold 19px ${FONT_OFFICIAL}`;
   ctx.fillText('ข้อเสนอแนะในการปรับปรุงและพัฒนา:', 55, notesY + 30);
-  ctx.font = `14px ${FONT_OFFICIAL}`;
+  ctx.font = `18px ${FONT_OFFICIAL}`;
   ctx.fillText(printPayload.suggestions || '-', 365, notesY + 30);
 
   // 5. แสดงชื่อ-นามสกุล และตำแหน่งผู้รายงานด้านขวาล่าง โดยไม่แสดงบรรทัดลงชื่อ
@@ -477,9 +467,9 @@ export async function generateThaiPdfBlob(report: EnablersReport): Promise<Blob>
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#000000';
-  ctx.font = `14.5px ${FONT_OFFICIAL}`;
+  ctx.font = `18px ${FONT_OFFICIAL}`;
   ctx.fillText(String(printPayload.signOff.recorderName || '').trim(), signX + 160, signY + 28);
-  ctx.font = `13.5px ${FONT_OFFICIAL}`;
+  ctx.font = `17px ${FONT_OFFICIAL}`;
   ctx.fillText(String(printPayload.signOff.recorderPosition || '').trim(), signX + 160, signY + 50);
 
   return new Promise<Blob>((resolve, reject) => {
@@ -555,16 +545,9 @@ export const PdfViewerModal: React.FC<PdfViewerModalProps> = ({
     const cached = currentPdfStore.getCurrentPdfBlob(report.id);
     if (cached) return cached;
 
-    // 2. ตรวจสอบจาก base64 ใน record
-    if (report.pdf_base64 && report.pdf_base64.length > 50) {
-      try {
-        const blob = base64ToBlob(report.pdf_base64, 'application/pdf');
-        currentPdfStore.setCurrentPdfBlob(report.id, blob);
-        return blob;
-      } catch (e) {
-        console.warn('Cannot decode pdf_base64, generating from canvas:', e);
-      }
-    }
+    // 2. ไม่ใช้ report.pdf_base64 จากฐานข้อมูลเป็น fallback เพราะอาจเป็น PDF รุ่นเก่า
+    // ที่สร้างด้วยแม่แบบเดิม ทำให้ Download / Print ไม่ตรงกับแม่แบบที่อนุมัติ
+    // หากไม่มี PDF ใน memory cache ให้สร้างจากแม่แบบปัจจุบันเสมอ
 
     // 3. Generate ใหม่และบันทึกลง store
     const generated = await generateThaiPdfBlob(report);
